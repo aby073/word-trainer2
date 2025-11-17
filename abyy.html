@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>So'z yodlash — Quiz</title>
+<style>
+  :root{
+    --bg:#071224;
+    --card:#0b1630;
+    --text:#e6eef6;
+    --muted:#9aa4b2;
+    --zangor:#2563eb;
+    --qizil:#ef4444;
+    --ok:#10b981;
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto;
+  }
+  body{
+    margin:0; min-height:100vh;
+    background:linear-gradient(180deg,#031021,#071224);
+    color:var(--text);
+    display:flex; justify-content:center; align-items:center;
+    padding:20px;
+  }
+  .wrap{
+    width:100%; max-width:720px;
+    background:rgba(255,255,255,0.03);
+    border-radius:12px; padding:22px;
+    border:1px solid rgba(255,255,255,0.04);
+    box-shadow: 0 8px 30px rgba(2,6,23,0.6);
+  }
+  h1{margin:0; font-size:20px}
+  .muted{color:var(--muted); font-size:13px}
+  .card{
+    margin-top:18px; padding:18px;
+    background:var(--card);
+    border-radius:10px;
+    border:1px solid rgba(255,255,255,0.03);
+    transition:background-color 250ms ease;
+  }
+  .word{
+    font-size:46px; font-weight:700;
+    text-align:center; margin:12px 0;
+  }
+  .progress{
+    display:flex; justify-content:space-between;
+    color:var(--muted); font-size:14px;
+  }
+  .input-row{display:flex; gap:8px; margin-top:12px}
+  input{
+    flex:1; padding:12px 14px;
+    border-radius:10px; border:1px solid rgba(255,255,255,0.05);
+    background:transparent; color:var(--text);
+    font-size:16px;
+  }
+  button{
+    padding:10px 14px; border-radius:10px;
+    border:0; cursor:pointer;
+    background:linear-gradient(90deg,#7c3aed,#06b6d4);
+    color:white; font-weight:700;
+  }
+  .ghost{
+    background:transparent; border:1px solid rgba(255,255,255,0.08);
+    color:var(--muted);
+  }
+  .feedback{margin-top:12px; text-align:center; font-weight:700; min-height:26px}
+  .controls{margin-top:12px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap}
+  .small{margin-top:8px; text-align:center; color:var(--muted); font-size:13px}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Inglizcha so‘z — O‘zbekcha javob</h1>
+      <div class="muted">Javobni yozing, Enter bosing.</div>
+      <div class="muted">To‘g‘ri: <span id="score">0</span> / <span id="total">0</span></div>
+    </header>
+
+    <div class="card" id="card">
+      <div class="progress">
+        <div id="pos">0 / 0</div>
+        <div id="percent">0%</div>
+      </div>
+
+      <div class="word" id="word">Loading...</div>
+
+      <div class="input-row">
+        <input id="answer" type="text" placeholder="O'zbekcha javob..." />
+        <button id="checkBtn">Tekshir</button>
+      </div>
+
+      <div class="feedback" id="feedback"></div>
+
+      <div class="controls">
+        <button class="ghost" id="prevBtn">Oldingi</button>
+        <button class="ghost" id="nextBtn">Keyingi</button>
+        <button class="ghost" id="shuffleBtn">Aralashtir</button>
+        <button id="restartBtn">Qayta boshlash</button>
+      </div>
+
+      <div class="small">Qisman to‘g‘ri javoblar ham qabul qilinadi.</div>
+    </div>
+  </div>
+
+<script>
+const rawList = [
+"approximately – taxminan",
+"technique – usul, texnika",
+"demanding – talabchan, murakkab",
+"arrangement – tartib, joylashuv",
+"process – jarayon",
+"identify – aniqlamoq, belgilamoq",
+"recognise – tanimoq",
+"research – tadqiqot",
+"opportunity – imkoniyat",
+"atmosphere – muhit",
+"facilities – sharoitlar, imkoniyatlar",
+"residence – yashash joyi, turar-joy",
+"accommodation – joylashish, turar-joy",
+"variety – xilma-xillik",
+"evaluate – baholamoq",
+"conversation – suhbat, muloqot",
+"impression – taassurot",
+"environment – muhit, atrof",
+"advantage – ustunlik, afzallik",
+"requirement – talab, shart",
+"encourage – rag‘batlantirmoq",
+"creativity – ijodkorlik",
+"importance – ahamiyat",
+"communicate – muloqot qilmoq",
+"further – yanada, keyingi",
+"produce – yaratmoq, ishlab chiqarmoq",
+"original – asl, o‘ziga xos",
+"value – qadrlamoq, qiymat",
+"intelligence – aql, idrok",
+"harmony – uyg‘unlik",
+"wealth – boylik","professional – mutaxassis, professional",
+"academic – akademik, ilmiy",
+"complexity – murakkablik",
+"motivation – motivatsiya, rag‘bat",
+"assess – baholamoq, tahlil qilmoq",
+"improvement – yaxshilanish",
+"observation – kuzatuv",
+"analysis – tahlil",
+"perspective – nuqtai nazar, qarash",
+"significance – ahamiyatlilik",
+"achievement – yutuq, erishilgan natija",
+"potential – salohiyat"
+];
+
+function norm(s){
+  return s.toLowerCase()
+    .replace(/[ʼ‘’`ʻ]/g,"'")
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
+const items = rawList.map(line=>{
+  const p = line.split("–");
+  const en = p[0].trim();
+  const uzList = p[1].split(/[,;]/).map(x => norm(x));
+  return {src: en, targets: uzList, raw: p[1]};
+});
+
+function similarity(a,b){
+  a=norm(a); b=norm(b);
+  const dp = Array(a.length+1).fill(null).map(()=>Array(b.length+1).fill(0));
+  for(let i=0;i<=a.length;i++) dp[i][0]=i;
+  for(let j=0;j<=b.length;j++) dp[0][j]=j;
+  for(let i=1;i<=a.length;i++)
+    for(let j=1;j<=b.length;j++)
+      dp[i][j] = a[i-1]==b[j-1]
+        ? dp[i-1][j-1]
+        : Math.min(dp[i-1][j-1]+1, dp[i][j-1]+1, dp[i-1][j]+1);
+  const dist = dp[a.length][b.length];
+  return 1 - dist / Math.max(a.length,b.length);
+}
+
+function isPartialCorrect(user, arr){
+  user = norm(user);
+  for(let a of arr){
+    a = norm(a);
+    if(a.includes(user) && user.length>=3) return true;
+    if(similarity(user,a) >= 0.7) return true;
+  }
+  return false;
+}
+
+let order = items.map((_,i)=>i);
+let idx=0, score=0;
+
+const wordEl=document.getElementById("word");
+const answerEl=document.getElementById("answer");
+const feedbackEl=document.getElementById("feedback");
+const scoreEl=document.getElementById("score");
+const totalEl=document.getElementById("total");
+const posEl=document.getElementById("pos");
+const percentEl=document.getElementById("percent");
+const cardEl=document.getElementById("card");
+
+totalEl.textContent = items.length;
+
+function show(){
+  if(idx>=items.length){
+    wordEl.textContent="Tugatildi!";
+    feedbackEl.textContent=`Natija: ${score}/${items.length}`;
+    return;
+  }
+  const it = items[order[idx]];
+  wordEl.textContent = it.src;
+  answerEl.value="";
+  feedbackEl.textContent="";
+  posEl.textContent = (idx+1)+"/"+items.length;
+  percentEl.textContent = Math.round(idx/items.length*100)+"%";
+  scoreEl.textContent = score;
+  answerEl.focus();
+}
+
+function flash(color){
+  cardEl.style.backgroundColor=color;
+  setTimeout(()=>cardEl.style.backgroundColor="",500);
+}
+
+function check(){
+  if(idx>=items.length) return;
+
+  const it = items[order[idx]];
+  const user = answerEl.value.trim();
+
+  const full = it.targets.includes(norm(user));
+  const part = isPartialCorrect(user, it.targets);
+  const ok = full || part;
+
+  if(ok){
+    score++;
+    feedbackEl.innerHTML=`<span style="color:var(--ok)">To‘g‘ri ✓</span>`;
+    flash("var(--zangor)");
+
+    setTimeout(()=>{
+      idx++;
+      show();
+    },600); 
+  } else {
+    feedbackEl.innerHTML=`<span style="color:var(--qizil)">Noto‘g‘ri ✗</span> — To‘g‘ri: <strong>${it.raw}</strong>`;
+    flash("var(--qizil)");
+
+    // 4 soniya kutib keyingi so‘zga o‘tish
+    setTimeout(()=>{
+      idx++;
+      show();
+    },4000);
+  }
+}
+
+document.getElementById("checkBtn").onclick = ()=>check();
+answerEl.addEventListener("keydown",e=>{
+  if(e.key==="Enter") check();
+});
+
+document.getElementById("nextBtn").onclick=()=>{if(idx<items.length-1) idx++; show();}
+document.getElementById("prevBtn").onclick=()=>{if(idx>0) idx--; show();}
+document.getElementById("restartBtn").onclick=()=>{idx=0; score=0; show();}
+document.getElementById("shuffleBtn").onclick=()=>{
+  order = order.sort(()=>Math.random()-0.5);
+  idx=0; score=0; show();
+};
+
+show();
+</script>
+</body>
+</html> 
